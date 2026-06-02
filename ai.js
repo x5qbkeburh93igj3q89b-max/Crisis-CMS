@@ -101,48 +101,111 @@ export async function importFromUrl({ url }) {
   if (!/^https?:\/\//.test(url || "")) throw new Error("http(s) のURLを指定してください");
   let html;
   try {
-    const r = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 CrisisCMS-Importer" }, redirect: "follow", signal: AbortSignal.timeout(15000) });
+    const r = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120 Safari/537.36" }, redirect: "follow", signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error("HTTP " + r.status);
     html = await r.text();
   } catch (e) { throw new Error("URLの取得に失敗しました: " + e.message); }
 
-  // 主要色を抽出（hex / rgb）
-  const colors = {};
-  for (const m of html.matchAll(/#([0-9a-fA-F]{6})\b/g)) { const c = "#" + m[1].toLowerCase(); colors[c] = (colors[c] || 0) + 1; }
-  const topColors = Object.entries(colors).sort((a, b) => b[1] - a[1]).slice(0, 6).map(c => c[0]);
+  // ----- カラー抽出 -----
+  const colorCount = {};
+  for (const m of html.matchAll(/#([0-9a-fA-F]{6})\b/g)) {
+    const c = "#" + m[1].toLowerCase();
+    if (c !== "#ffffff" && c !== "#000000" && c !== "#eeeeee" && c !== "#f0f0f0") colorCount[c] = (colorCount[c] || 0) + 1;
+  }
+  const topColors = Object.entries(colorCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(c => c[0]);
 
-  // テキスト構造を抽出（タグを残しつつ本文を圧縮）
-  const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "";
-  const struct = html
-    .replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<(h[1-3]|p|li|button|a)\b[^>]*>/gi, "\n[$1] ")
-    .replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/[ \t]+/g, " ")
-    .split("\n").map(s => s.trim()).filter(s => s.length > 1).slice(0, 120).join("\n").slice(0, 6000);
+  // ----- メタ情報 -----
+  const t = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]?.replace(/<[^>]+>/g, "").trim() || "";
+  const metaDesc = (html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i) || html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i) || [])[1] || "";
+  const ogTitle = (html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["']/i) || [])[1] || "";
+
+  // ----- HTML を整形してセクション単位で解析 -----
+  const clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\s(style|onclick|onload|data-[a-z-]+|aria-[a-z-]+|tabindex|role|for|id)="[^"]*"/gi, "");
+
+  function textOf(s) {
+    return s.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
+  }
+
+  // セクション境界を検出して構造化
+  const sections = [];
+  // section / header / main / footer / article 単位で分割を試みる
+  const secRe = /<(section|header|main|footer|article|div)[^>]*>([\s\S]*?)<\/\1>/gi;
+  const found = [...clean.matchAll(secRe)].filter(m => textOf(m[2]).length > 30);
+
+  if (found.length >= 2) {
+    // セクション単位で構造抽出
+    for (const m of found.slice(0, 20)) {
+      const inner = m[2];
+      const headings = [...inner.matchAll(/<(h[1-6])[^>]*>([\s\S]*?)<\/\1>/gi)].map(h => `[${h[1].toUpperCase()}] ${textOf(h[2])}`);
+      const paras = [...inner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map(p => textOf(p[1])).filter(s => s.length > 5).slice(0, 4);
+      const ctas = [...inner.matchAll(/<(button|a)[^>]*>([\s\S]*?)<\/\1>/gi)].map(b => `[CTA] ${textOf(b[2])}`).filter(s => s.length > 3).slice(0, 4);
+      const imgs = [...inner.matchAll(/<img[^>]*alt="([^"]+)"[^>]*>/gi)].map(i => `[IMG] ${i[1]}`).slice(0, 3);
+      const items = [...inner.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map(l => textOf(l[1])).filter(s => s.length > 2).slice(0, 6);
+      const lines = [...headings, ...paras, ...items, ...ctas, ...imgs].filter(Boolean);
+      if (lines.length) sections.push(`--- ${m[1].toUpperCase()} ---\n` + lines.join("\n"));
+    }
+  }
+
+  // フォールバック: セクション検出できなかった場合はフラット抽出（より多く）
+  const struct = sections.length >= 2
+    ? sections.join("\n\n").slice(0, 10000)
+    : clean
+        .replace(/<(h[1-6])\b[^>]*>/gi, "\n[H] ").replace(/<\/(h[1-6])>/gi, "")
+        .replace(/<p\b[^>]*>/gi, "\n[P] ").replace(/<\/p>/gi, "")
+        .replace(/<li\b[^>]*>/gi, "\n[LI] ").replace(/<\/li>/gi, "")
+        .replace(/<(button|a)\b[^>]*>/gi, "\n[CTA] ").replace(/<\/(button|a)>/gi, "")
+        .replace(/<img[^>]*alt="([^"]*)"[^>]*>/gi, "\n[IMG] $1")
+        .replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ")
+        .split("\n").map(s => s.trim()).filter(s => s.length > 2).slice(0, 200).join("\n").slice(0, 10000);
 
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key || key.startsWith("sk-ant-xxx")) throw new Error("ANTHROPIC_API_KEY が未設定です");
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-  const sys = `あなたはWebデザイナーです。参考ページの「構成・セクションの並び・配色の雰囲気」を分析し、似た構成のページをブロックJSONで再現します。文章はそのままコピーせず、汎用的な日本語の仮テキストに置き換えてください（後でユーザーが書き換えます）。
+
+  const sys = `あなたはWebデザイナーです。参考ページのHTMLから抽出した構造データを受け取り、同じページ構成をブロックJSONで再現します。
+
+【最重要ルール】
+- セクション数・並び順を参考ページと完全に一致させる
+- 各セクションのブロック種別（hero/heading/text/columns/cta/stats/team/faq/pricing/list/quote/button）を適切に選ぶ
+- テキスト内容は日本語の仮テキストに置き換える（後でユーザーが書き換える）
+- ただし「見出しの意図・ニュアンス」は保持する（例: "料金プラン" → "料金プラン" のままでよい）
+- CTAボタンは必ず含める
+- columnsブロックで2〜3列レイアウトを積極的に使う
+- heroブロックのbg2フィールド(任意)に第2アクセントカラーを入れるとgradient表示できる
+- statsブロック: items:[{num:"数値",label:"ラベル"}]
+- faqブロック: items:[{q:"質問",a:"回答"}]
+- pricingブロック: plans:[{name,price,features:[],featured:bool}]
+- teamブロック: members:[{name,role,img:""}]
+
 ${BLOCK_SPEC}
-出力は次のJSONのみ:
-{"blocks":[ ... ], "note":"参考にした構成と配色の要点を1〜2文", "accent":"#推奨アクセント色"}`;
-  const userMsg = `参考ページのタイトル: ${title}
-抽出した主要カラー候補: ${topColors.join(", ") || "不明"}
-抽出した構造（タグ付き本文の要約）:
+
+出力はJSONのみ（前後の説明・コードフェンス不要）:
+{"blocks":[...], "note":"再現した構成の要点を1文", "accent":"#推奨アクセントカラー", "heroStyle":"default|gradient|particles"}`;
+
+  const userMsg = `■ページタイトル: ${ogTitle || t}
+■説明文: ${metaDesc}
+■抽出カラー: ${topColors.join(", ") || "不明"}
+
+■ページ構造（セクション別）:
 ${struct}
 
-この構成に近いページを作ってください。heroやcolumns等を活用し、セクションの並びを再現。文章は仮テキストに置換。`;
+上記の構造を忠実に再現したブロック配列を生成してください。テキストは仮テキストに置換。`;
 
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: 4000, system: sys, messages: [{ role: "user", content: userMsg }] }),
+    body: JSON.stringify({ model, max_tokens: 6000, system: sys, messages: [{ role: "user", content: userMsg }] }),
   });
   if (!res.ok) throw new Error(`Claude APIエラー(${res.status}): ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
   const json = extractJSON((data.content || []).map(c => c.text || "").join("").trim());
   if (!json || !Array.isArray(json.blocks)) throw new Error("解析結果を解釈できませんでした");
-  return { blocks: json.blocks, note: json.note || "", accent: json.accent || topColors[0] || "" };
+  return { blocks: json.blocks, note: json.note || "", accent: json.accent || topColors[0] || "", heroStyle: json.heroStyle || "default" };
 }
 
 /**

@@ -469,14 +469,17 @@ $("aiUrlBtn").onclick = async () => {
   const url = $("aiUrl").value.trim(); if (!url) return toast("URLを入力してください", true);
   const btn = $("aiUrlBtn"); btn.innerHTML = `<span class="spin"></span> 取込中…`; btn.disabled = true; $("aiUrlOut").textContent = "";
   try {
-    const { blocks, note, accent } = await api("POST", "/api/ai/import-url", { url });
+    const { blocks, note, accent, heroStyle } = await api("POST", "/api/ai/import-url", { url });
+    // heroStyle を hero ブロックに自動適用
+    if (heroStyle && heroStyle !== "default") blocks.filter(b => b.type === "hero").forEach(b => { b.heroStyle = heroStyle; });
     blocks.forEach(reId);
-    openModal(`<h2>🔗 取込結果（${blocks.length}ブロック）</h2><p style="font-size:13px;color:var(--muted)">${esc(note)}</p>
+    const heroTag = heroStyle && heroStyle !== "default" ? ` <span style="font-size:11px;background:var(--accent);color:#fff;border-radius:4px;padding:2px 7px">${heroStyle}</span>` : "";
+    openModal(`<h2>🔗 取込結果（${blocks.length}ブロック）${heroTag}</h2><p style="font-size:13px;color:var(--muted)">${esc(note)}</p>
       ${accent ? `<p style="font-size:13px">推奨アクセント色: <span style="display:inline-block;width:14px;height:14px;background:${esc(accent)};border-radius:3px;vertical-align:-2px"></span> ${esc(accent)}</p>` : ""}
       <div class="modal-actions"><button class="tbtn" onclick="closeModal()">キャンセル</button>
       <button class="tbtn" id="iuAppend">末尾に追加</button>
       <button class="tbtn primary" id="iuReplace">置き換え${accent ? "＋配色適用" : ""}</button></div>`);
-    const applyAccent = async () => { if (accent && /^#[0-9a-fA-F]{6}$/.test(accent)) { SITE.settings.accent = accent; await api("PUT", "/api/site/settings", { settings: SITE.settings }); } };
+    const applyAccent = async () => { if (accent && /^#[0-9a-fA-F]{6}$/.test(accent)) { SITE.settings.accent = accent; await api("PUT", "/api/site/settings", { settings: SITE.settings }); applySiteVars(); } };
     $("iuAppend").onclick = () => { curPage().blocks.push(...blocks); afterAI(); };
     $("iuReplace").onclick = async () => { curPage().blocks = blocks; await applyAccent(); afterAI(); };
   } catch (e) { $("aiUrlOut").textContent = "エラー: " + e.message; }
