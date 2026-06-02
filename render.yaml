@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mycms           # ← Render 上でのサービス名。これがサブドメイン名になります（mycms.onrender.com）
+    env: node
+    repo: <your-github-username>/<your-repo-name>  # ← リポジトリを指定
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crisis CMS</title>
+<link rel="stylesheet" href="style.css">
+<script src="vendor/chart.umd.js"></script>
+</head>
+<body class="editing">
+
+<!-- ===== ログイン ===== -->
+<div class="login-wrap" id="loginView">
+  <div class="login-card">
+    <h1>Crisis <b>CMS</b></h1>
+    <p class="kv-catch">AIがサイト制作を代行するCMS</p>
+    <div class="kv-tags"><span>企画</span><span>デザイン</span><span>SEO</span><span>ブログ</span><span>アクセス解析</span></div>
+    <p class="kv-sub">すべてAIと共同編集で完結。</p>
+    <input type="email" id="loginEmail" placeholder="メールアドレス（ID）" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="パスワード" autocomplete="current-password">
+    <div class="login-err" id="loginErr"></div>
+    <button id="loginBtn">ログイン</button>
+  </div>
+</div>
+
+<!-- ===== マスター管理画面 ===== -->
+<div class="app hidden" id="masterView">
+  <div class="topbar">
+    <div class="logo">Crisis <b>CMS</b> <span style="font-size:11px;color:var(--accent2);font-weight:600">マスター管理</span></div>
+    <div class="spacer"></div>
+    <span class="who" id="masterWho"></span>
+    <button class="tbtn" id="mUsage">📊 使用量・プラン</button>
+    <button class="tbtn" id="mAccount">アカウント設定</button>
+    <button class="tbtn" id="mLogout">ログアウト</button>
+  </div>
+  <div style="overflow:auto;padding:24px">
+    <div style="max-width:1000px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="margin:0">サイト一覧</h2>
+        <button class="tbtn primary" id="mNewSite">＋ 新しいサイトを作成</button>
+      </div>
+      <div id="siteCards"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== アプリ本体 ===== -->
+<div class="app hidden" id="appView">
+  <div class="topbar">
+    <button class="tbtn hidden" id="btnBackMaster" title="マスター管理へ戻る">← 管理</button>
+    <div class="logo">Crisis <b>CMS</b> <span id="siteName" style="font-size:12px;color:var(--muted);font-weight:500"></span></div>
+    <div class="seg" id="modeSeg">
+      <button data-mode="edit" class="active">編集</button>
+      <button data-mode="preview">プレビュー</button>
+    </div>
+    <div class="seg" id="deviceSeg" title="端末プレビュー">
+      <button data-dev="desktop" class="active">🖥</button>
+      <button data-dev="tablet">📱</button>
+      <button data-dev="mobile">📲</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="presence" id="presence"></div>
+    <span class="who" id="whoami"></span>
+    <button class="tbtn" id="btnLogout">ログアウト</button>
+  </div>
+
+  <div class="main">
+    <nav class="navrail">
+      <div class="nav-group">メイン</div>
+      <button class="navitem" id="btnSettings"><span>⚙</span>デザイン</button>
+      <button class="navitem" id="btnTemplates"><span>📋</span>テンプレート</button>
+      <button class="navitem" id="btnMedia"><span>🖼</span>メディア</button>
+      <button class="navitem" id="btnSEO"><span>🔍</span>SEO診断</button>
+      <button class="navitem" id="btnBlog"><span>📝</span>ブログ</button>
+      <div class="nav-group">運用</div>
+      <button class="navitem" id="btnAnalytics"><span>📊</span>アクセス解析</button>
+      <button class="navitem" id="btnForms"><span>📨</span>問い合わせ</button>
+      <button class="navitem" id="btnGrowth"><span>🚀</span>AIグロース</button>
+      <div class="nav-group">管理</div>
+      <button class="navitem" id="btnPublish"><span>🌐</span>公開する</button>
+      <button class="navitem" id="btnPreviewWin"><span>🔗</span>公開ページ表示</button>
+      <button class="navitem" id="btnHistory"><span>🕘</span>編集履歴</button>
+      <button class="navitem" id="btnExport"><span>⬇</span>書き出し</button>
+      <button class="navitem" id="btnAccount"><span>👤</span>アカウント</button>
+    </nav>
+    <div class="side left">
+      <h3>ページ <button class="tbtn" style="float:right;padding:2px 8px;font-size:11px" id="btnAddPage">＋</button></h3>
+      <div id="pageList"></div>
+      <h3>ブロックを追加</h3>
+      <div class="palette" id="palette"></div>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="canvas" id="canvas"><div class="dropzone" id="rootZone"></div></div>
+    </div>
+
+    <div class="side right">
+      <h3>✨ AIデザイン提案</h3>
+      <div class="ai-box">
+        <textarea id="aiDesignPrompt" placeholder="例: カフェの新メニュー紹介ページを作って。落ち着いた雰囲気で。"></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="tbtn ai" id="aiDesignBtn" style="flex:1">構成を生成</button>
+          <button class="tbtn" id="aiAdviceBtn" title="助言だけもらう">助言</button>
+        </div>
+        <div class="ai-out" id="aiDesignOut"></div>
+      </div>
+      <h3>💬 AIに編集を指示（会話型）</h3>
+      <div class="ai-box">
+        <div class="chips" id="chatChips">
+          <button data-p="コンバージョン率を上げる構成に改善して">CV率を上げて</button>
+          <button data-p="採用応募が増えるように求人ブロックとCTAを追加して">採用応募を増やす</button>
+          <button data-p="全体を高級感のある上質なデザインとコピーに整えて">高級感を出す</button>
+          <button data-p="20代の若い層に響くトーンとデザインに調整して">20代向けに</button>
+          <button data-p="見出しと本文をSEOに強い構成に書き換えて">SEOを強化</button>
+        </div>
+        <textarea id="chatInput" placeholder="例: トップに「お客様の声」セクションを追加して。最後に予約フォームも。"></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="tbtn ai" id="chatBtn" style="flex:1">このページを編集</button><button class="tbtn" id="a11yBtn" title="アクセシビリティ・表記チェック">♿ 点検</button></div>
+        <div class="ai-out" id="chatOut"></div>
+      </div>
+      <h3>🔗 参考URLから取込</h3>
+      <div class="ai-box">
+        <input type="url" id="aiUrl" placeholder="https://参考サイト.com" style="width:100%;background:#fff;border:1px solid var(--border2);border-radius:8px;padding:9px;font-size:13px">
+        <button class="tbtn ai" id="aiUrlBtn" style="width:100%;margin-top:6px">構成を取り込む</button>
+        <p style="font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5">構成・配色の参考として近いレイアウトを生成します（複製ではありません。文章はご自身で調整してください）。</p>
+        <div class="ai-out" id="aiUrlOut"></div>
+      </div>
+      <h3>ブロック設定</h3>
+      <div id="inspector"><div class="insp-empty">ブロックを選択すると<br>ここで詳細設定できます。</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== アナリティクス ダッシュボード ===== -->
+<div class="app hidden" id="analyticsView">
+  <div class="topbar">
+    <button class="tbtn" id="anaBack">← 戻る</button>
+    <div class="logo">Crisis <b>CMS</b> <span id="anaSiteName" style="font-size:12px;color:var(--muted);font-weight:500"></span></div>
+    <div class="spacer"></div>
+    <span class="who" id="anaWho"></span>
+  </div>
+  <div class="dash">
+    <h1 class="dash-title">ダッシュボード</h1>
+    <div class="filter-card">
+      <div class="filter-row">
+        <div class="fl"><label>ページ選択</label>
+          <select id="anaPage"><option value="">サイト全体</option></select></div>
+        <div class="fl"><label>デバイス</label>
+          <select id="anaDevice"><option value="">すべて</option><option value="desktop">PC</option><option value="tablet">タブレット</option><option value="mobile">スマホ</option></select></div>
+        <div class="fl"><label>表示期間</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="date" id="anaFrom"><span>―</span><input type="date" id="anaTo"></div></div>
+        <div class="fl"><label>粒度</label>
+          <div class="seg" id="anaGran">
+            <button data-g="day" class="active">日別</button>
+            <button data-g="week">週別</button>
+            <button data-g="month">月別</button></div></div>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="anaKpi"></div>
+
+    <div class="chart-card">
+      <h2 class="card-h">アクセス推移</h2>
+      <div style="position:relative;height:300px"><canvas id="anaChart"></canvas></div>
+    </div>
+
+    <div class="ai-box" style="max-width:none">
+      <button class="tbtn ai" id="anaInsight2" style="width:auto;padding:9px 18px">✨ AIにこのデータを分析してもらう</button>
+      <div class="ai-out" id="anaOut2"></div>
+    </div>
+
+    <div class="table-grid">
+      <div class="chart-card"><h2 class="card-h">流入元別URL</h2><div id="anaRefs"></div></div>
+      <div class="chart-card"><h2 class="card-h">ページ別アクセス</h2><div id="anaPages"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
+
+<script src="app.js"></script>
+</body>
+</html>

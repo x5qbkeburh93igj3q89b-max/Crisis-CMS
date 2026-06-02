@@ -1,0 +1,20 @@
+{
+  "name": "crisis-cms",
+  "version": "1.0.0",
+  "description": "独自CMS — リアルタイム共同編集・AIデザイン提案・画像生成つきフルスタックCMS",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}
