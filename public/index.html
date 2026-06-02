@@ -121,8 +121,14 @@
       <div class="ai-box">
         <input type="url" id="aiUrl" placeholder="https://参考サイト.com" style="width:100%;background:#fff;border:1px solid var(--border2);border-radius:8px;padding:9px;font-size:13px">
         <button class="tbtn ai" id="aiUrlBtn" style="width:100%;margin-top:6px">構成を取り込む</button>
-        <p style="font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5">構成・配色の参考として近いレイアウトを生成します（複製ではありません。文章はご自身で調整してください）。</p>
+        <p style="font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5">セクション構成・配色を再現します。取り込み後は文字を書き換えるだけで使えます。</p>
         <div class="ai-out" id="aiUrlOut"></div>
+      </div>
+      <h3>🎨 AIカスタムCSS</h3>
+      <div class="ai-box">
+        <input id="aiCssMood" placeholder="例: 近未来・ダーク・サイバーパンク" style="width:100%;background:#fff;border:1px solid var(--border2);border-radius:8px;padding:9px;font-size:13px">
+        <button class="tbtn ai" id="aiCssBtn" style="width:100%;margin-top:6px">✨ CSSを生成して適用</button>
+        <div class="ai-out" id="aiCssOut"></div>
       </div>
       <h3>ブロック設定</h3>
       <div id="inspector"><div class="insp-empty">ブロックを選択すると<br>ここで詳細設定できます。</div></div>

@@ -119,49 +119,22 @@ export async function importFromUrl({ url }) {
   const metaDesc = (html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i) || html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i) || [])[1] || "";
   const ogTitle = (html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["']/i) || [])[1] || "";
 
-  // ----- HTML を整形してセクション単位で解析 -----
-  const clean = html
+  // ----- HTML を整形してセマンティック構造を保持しつつクリーン化 -----
+  // scriptやstyle等の不要タグを除去しつつ、構造タグ(h1-6,section,p,button等)は保持して Claude に渡す
+  const struct = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<svg[\s\S]*?<\/svg>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/\s(style|onclick|onload|data-[a-z-]+|aria-[a-z-]+|tabindex|role|for|id)="[^"]*"/gi, "");
-
-  function textOf(s) {
-    return s.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
-  }
-
-  // セクション境界を検出して構造化
-  const sections = [];
-  // section / header / main / footer / article 単位で分割を試みる
-  const secRe = /<(section|header|main|footer|article|div)[^>]*>([\s\S]*?)<\/\1>/gi;
-  const found = [...clean.matchAll(secRe)].filter(m => textOf(m[2]).length > 30);
-
-  if (found.length >= 2) {
-    // セクション単位で構造抽出
-    for (const m of found.slice(0, 20)) {
-      const inner = m[2];
-      const headings = [...inner.matchAll(/<(h[1-6])[^>]*>([\s\S]*?)<\/\1>/gi)].map(h => `[${h[1].toUpperCase()}] ${textOf(h[2])}`);
-      const paras = [...inner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map(p => textOf(p[1])).filter(s => s.length > 5).slice(0, 4);
-      const ctas = [...inner.matchAll(/<(button|a)[^>]*>([\s\S]*?)<\/\1>/gi)].map(b => `[CTA] ${textOf(b[2])}`).filter(s => s.length > 3).slice(0, 4);
-      const imgs = [...inner.matchAll(/<img[^>]*alt="([^"]+)"[^>]*>/gi)].map(i => `[IMG] ${i[1]}`).slice(0, 3);
-      const items = [...inner.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map(l => textOf(l[1])).filter(s => s.length > 2).slice(0, 6);
-      const lines = [...headings, ...paras, ...items, ...ctas, ...imgs].filter(Boolean);
-      if (lines.length) sections.push(`--- ${m[1].toUpperCase()} ---\n` + lines.join("\n"));
-    }
-  }
-
-  // フォールバック: セクション検出できなかった場合はフラット抽出（より多く）
-  const struct = sections.length >= 2
-    ? sections.join("\n\n").slice(0, 10000)
-    : clean
-        .replace(/<(h[1-6])\b[^>]*>/gi, "\n[H] ").replace(/<\/(h[1-6])>/gi, "")
-        .replace(/<p\b[^>]*>/gi, "\n[P] ").replace(/<\/p>/gi, "")
-        .replace(/<li\b[^>]*>/gi, "\n[LI] ").replace(/<\/li>/gi, "")
-        .replace(/<(button|a)\b[^>]*>/gi, "\n[CTA] ").replace(/<\/(button|a)>/gi, "")
-        .replace(/<img[^>]*alt="([^"]*)"[^>]*>/gi, "\n[IMG] $1")
-        .replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ")
-        .split("\n").map(s => s.trim()).filter(s => s.length > 2).slice(0, 200).join("\n").slice(0, 10000);
+    // 不要属性を除去（class・href・alt・src の一部は残す）
+    .replace(/ (style|onclick|on\w+|data-[a-z-]+|aria-[a-z-]+|tabindex|role|for|srcset|sizes|loading|decoding|width|height|crossorigin|integrity|rel|type|target|id)="[^"]*"/gi, "")
+    // nav・footer・aside などの付帯要素を省略（本文に集中させる）
+    .replace(/<(nav|footer|aside|header)[^>]*>[\s\S]*?<\/\1>/gi, "")
+    // 空白を圧縮
+    .replace(/\s+/g, " ")
+    .trim()
+    // 先頭 14000 文字（Claude の文脈として十分）
+    .slice(0, 14000);
 
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key || key.startsWith("sk-ant-xxx")) throw new Error("ANTHROPIC_API_KEY が未設定です");

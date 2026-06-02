@@ -362,7 +362,9 @@ function renderInspector() {
     case "spacer": h = `<div class="field"><label>高さ px</label><input type="number" data-f="height" value="${b.height}"></div>`; break;
     case "video": h = `<div class="field"><label>動画URL（YouTube/Vimeo）</label><input type="url" data-f="url" value="${esc(b.url)}" placeholder="https://youtu.be/..."></div>`; break;
     case "html": h = `<div class="field"><label>HTMLコード</label><textarea data-f="code" style="min-height:160px">${esc(b.code)}</textarea></div>`; break;
-    case "hero": h = `<div class="field"><label>タイトル</label><input type="text" data-f="title" value="${esc(b.title)}"></div><div class="field"><label>サブテキスト</label><input type="text" data-f="sub" value="${esc(b.sub)}"></div><div class="field"><label>ボタン文字</label><input type="text" data-f="btn" value="${esc(b.btn)}"></div><div class="field"><label>ボタンリンク</label><input type="text" data-f="href" value="${esc(b.href)}"></div><div class="field row"><div><label>背景色</label><input type="color" data-f="bg" value="${b.bg}"></div><div><label>文字色</label><input type="color" data-f="color" value="${b.color}"></div></div><div class="field"><label>背景画像URL(任意)</label><input type="url" data-f="img" value="${esc(b.img||"")}"></div>
+    case "hero": h = `<div class="field"><label>タイトル</label><input type="text" data-f="title" value="${esc(b.title)}"></div><div class="field"><label>サブテキスト</label><input type="text" data-f="sub" value="${esc(b.sub)}"></div><div class="field"><label>ボタン文字</label><input type="text" data-f="btn" value="${esc(b.btn)}"></div><div class="field"><label>ボタンリンク</label><input type="text" data-f="href" value="${esc(b.href)}"></div><div class="field row"><div><label>背景色</label><input type="color" data-f="bg" value="${b.bg||'#5b8cff'}"></div><div><label>文字色</label><input type="color" data-f="color" value="${b.color||'#ffffff'}"></div></div>
+        <div class="field row"><div><label>グラデ第2色</label><input type="color" data-f="bg2" value="${b.bg2||'#a855f7'}"></div><div style="flex:2"><label>背景画像URL(任意)</label><input type="url" data-f="img" value="${esc(b.img||"")}"></div></div>
+        <div class="field"><label>✨ アニメーションスタイル</label><select data-f="heroStyle"><option value="default" ${(b.heroStyle||'default')==='default'?'selected':''}>デフォルト（固定色）</option><option value="gradient" ${b.heroStyle==='gradient'?'selected':''}>グラデーションアニメ</option><option value="particles" ${b.heroStyle==='particles'?'selected':''}>パーティクル</option></select></div>
         <div class="field" style="background:var(--accent-soft);padding:8px;border-radius:8px"><label style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><input type="checkbox" data-f="cv" ${b.cv?"checked":""}> 🎯 CTAクリックをコンバージョン計測</label>
         <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" data-f="ab" ${b.ab?"checked":""}> 🧪 A/Bテスト（タイトルを2案で出し分け）</label></div>
         <div class="field"><label>タイトル案B（A/B用）</label><input type="text" data-f="titleB" value="${esc(b.titleB||"")}" placeholder="もう一方のタイトル案"></div>`; break;
@@ -484,6 +486,22 @@ $("aiUrlBtn").onclick = async () => {
     $("iuReplace").onclick = async () => { curPage().blocks = blocks; await applyAccent(); afterAI(); };
   } catch (e) { $("aiUrlOut").textContent = "エラー: " + e.message; }
   btn.innerHTML = "構成を取り込む"; btn.disabled = false;
+};
+
+/* ============ AIカスタムCSS（サイドバー） ============ */
+$("aiCssBtn").onclick = async () => {
+  const btn = $("aiCssBtn"); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> 生成中…`;
+  $("aiCssOut").textContent = "";
+  try {
+    const mood = $("aiCssMood").value.trim() || "モダン";
+    const { css, heroStyle, note } = await api("POST", "/api/ai/custom-css", { mood });
+    SITE.settings.customCss = css;
+    await api("PUT", "/api/site/settings", { settings: SITE.settings });
+    applySiteVars(); renderCanvas();
+    $("aiCssOut").textContent = `✓ ${note}${heroStyle !== "default" ? ` / hero推奨: ${heroStyle}` : ""}`;
+    toast("カスタムCSSを適用しました");
+  } catch (e) { $("aiCssOut").textContent = "エラー: " + e.message; }
+  btn.disabled = false; btn.innerHTML = "✨ CSSを生成して適用";
 };
 
 /* ============ テンプレート集 ============ */
@@ -835,7 +853,7 @@ function renderKpi(k) {
     <div class="k-top"><span class="k-dot" style="background:${c.color}">●</span>${c.label}</div>
     <div class="k-val">${c.raw ? c.val : (c.val || 0).toLocaleString()}</div></div>`).join("");
 }
-function renderAnaChart(series, gran) {
+function renderAnaChart(series, _gran) {
   const labels = series.map(s => s.d);
   const pv = series.map(s => s.pv);
   const users = series.map(s => s.u);
@@ -996,12 +1014,8 @@ $("btnSettings").onclick = () => {
     <label>ページ背景色</label><input id="st_pagebg" type="color" value="${s.pageBg}">
     <label>基本文字色</label><input id="st_text" type="color" value="${s.textColor}">
     <label>エディタ高さ</label><select id="st_canvas_h"><option value="small" ${(s.canvasHeight||'medium')==='small'?'selected':''}>コンパクト (500px)</option><option value="medium" ${(s.canvasHeight||'medium')==='medium'?'selected':''}>普通 (700px)</option><option value="large" ${(s.canvasHeight||'medium')==='large'?'selected':''}>広め (画面高さ)</option><option value="fullscreen" ${(s.canvasHeight||'medium')==='fullscreen'?'selected':''}>全画面</option></select>
-    <label style="grid-column:1/-1;margin-top:8px">▼ カスタムCSS（近未来エフェクト）</label>
-    <label style="grid-column:1/-1">雰囲気キーワード（例: 近未来・クール・和風）</label>
-    <input id="st_mood" style="grid-column:1/-1" value="${esc(s.mood || "")}" placeholder="例: 近未来・ダーク・サイバーパンク">
-    <label style="grid-column:1/-1">カスタムCSS（直接編集も可）</label>
-    <textarea id="st_customcss" style="grid-column:1/-1;min-height:80px;font-family:monospace;font-size:12px" placeholder="/* ここにCSSを入力 */">${esc(s.customCss || "")}</textarea>
-    <div style="grid-column:1/-1"><button class="tbtn ai" id="st_gen_css">✨ AIにCSSを生成してもらう</button><span id="st_css_status" style="font-size:12px;margin-left:10px;color:var(--muted)"></span></div>
+    <label style="grid-column:1/-1;margin-top:8px">▼ カスタムCSS（直接編集 or 右サイドバーのAI CSS生成を使用）</label>
+    <textarea id="st_customcss" style="grid-column:1/-1;min-height:80px;font-family:monospace;font-size:12px" placeholder="/* ここにCSSを直接入力 */">${esc(s.customCss || "")}</textarea>
     <label style="grid-column:1/-1;margin-top:8px">▼ 問い合わせ通知（任意）</label>
     <label>通知先メール（要SMTP設定）</label><input id="st_nmail" value="${esc(s.notifyEmail || "")}" placeholder="owner@example.com">
     <label>通知Webhook URL（Slack等）</label><input id="st_nhook" value="${esc(s.notifyWebhook || "")}" placeholder="https://hooks.slack.com/...">
@@ -1012,18 +1026,8 @@ $("btnSettings").onclick = () => {
     $("st_font").value = p.font;
     $("modalBox").querySelectorAll(".preset-card").forEach(x => x.classList.toggle("active", x === c));
   });
-  $("st_gen_css").onclick = async () => {
-    const btn = $("st_gen_css"); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> 生成中…`;
-    $("st_css_status").textContent = "";
-    try {
-      const { css, heroStyle, note } = await api("POST", "/api/ai/custom-css", { mood: $("st_mood").value });
-      $("st_customcss").value = css;
-      $("st_css_status").textContent = `✓ ${note} (hero推奨: ${heroStyle})`;
-    } catch (e) { $("st_css_status").textContent = "エラー: " + e.message; }
-    btn.disabled = false; btn.innerHTML = "✨ AIにCSSを生成してもらう";
-  };
   $("st_apply").onclick = async () => {
-    Object.assign(s, { siteTitle: $("st_title").value, font: $("st_font").value, maxWidth: parseInt($("st_maxw").value) || 960, fullWidth: $("st_full").checked, accent: $("st_accent").value, pageBg: $("st_pagebg").value, textColor: $("st_text").value, canvasHeight: $("st_canvas_h").value, mood: $("st_mood").value, customCss: $("st_customcss").value, notifyEmail: $("st_nmail").value, notifyWebhook: $("st_nhook").value });
+    Object.assign(s, { siteTitle: $("st_title").value, font: $("st_font").value, maxWidth: parseInt($("st_maxw").value) || 960, fullWidth: $("st_full").checked, accent: $("st_accent").value, pageBg: $("st_pagebg").value, textColor: $("st_text").value, canvasHeight: $("st_canvas_h").value, customCss: $("st_customcss").value, notifyEmail: $("st_nmail").value, notifyWebhook: $("st_nhook").value });
     await api("PUT", "/api/site/settings", { settings: s });
     closeModal(); applySiteVars(); renderCanvas(); toast("デザインを更新しました");
   };
