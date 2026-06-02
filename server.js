@@ -1,5 +1,5 @@
 // server.js — マルチテナントCMS。Express REST API + WebSocket（リアルタイム共同編集）
-import "./loadenv.js";
+import 'dotenv/config';
 import express from "express";
 import cookieParser from "cookie-parser";
 import http from "http";

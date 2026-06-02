@@ -24,6 +24,9 @@ const BLOCK_SPEC = `
  */
 export async function suggestDesign({ instruction, currentBlocks = [], siteTitle = "" }) {
   const key = process.env.ANTHROPIC_API_KEY;
+  console.log("ANTHROPIC_API_KEY exists:", !!key);
+  console.log("ANTHROPIC_API_KEY prefix:", key?.slice(0, 15));
+  console.log("ANTHROPIC_MODEL:", process.env.ANTHROPIC_MODEL);
   if (!key || key.startsWith("sk-ant-xxx")) {
     throw new Error("ANTHROPIC_API_KEY が未設定です（.env を設定してください）");
   }
