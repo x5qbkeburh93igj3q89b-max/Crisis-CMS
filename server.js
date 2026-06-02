@@ -166,6 +166,7 @@ app.put("/api/pages/:id/blocks", auth, (req, res) => {
 
 // ================= AI =================
 app.post("/api/ai/design", auth, async (req, res) => {
+  console.log("[ai/design] hit - user:", req.user?.email, "role:", req.user?.role, "siteId:", req.query.siteId || req.body?.siteId);
   const sid = assertSiteAccess(req, res); if (!sid) return;
   if (!canEditRole(req.user.role)) return res.status(403).json({ error: "権限がありません" });
   try { res.json(await suggestDesign({ instruction: req.body.instruction || "魅力的なページを作って", currentBlocks: req.body.currentBlocks || [], siteTitle: req.body.siteTitle || "" })); }
