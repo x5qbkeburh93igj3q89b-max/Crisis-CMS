@@ -126,6 +126,20 @@ try { db.exec("ALTER TABLE form_submissions ADD COLUMN status TEXT NOT NULL DEFA
 try { db.exec("ALTER TABLE pages ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'"); } catch { /* 既存 */ }
 try { db.exec("ALTER TABLE page_views ADD COLUMN visitor TEXT"); } catch {}
 try { db.exec("ALTER TABLE page_views ADD COLUMN is_new INTEGER NOT NULL DEFAULT 0"); } catch {}
+try { db.exec("ALTER TABLE pages ADD COLUMN slug TEXT"); } catch {}
+try { db.exec("ALTER TABLE pages ADD COLUMN parent_id INTEGER"); } catch {}
+// 既存ページで slug が未設定のものに自動生成
+try {
+  const noSlug = db.prepare("SELECT id, name FROM pages WHERE slug IS NULL OR slug=''").all();
+  const used = new Set();
+  noSlug.forEach(p => {
+    let base = String(p.name || "page").toLowerCase().replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, "-").replace(/^-+|-+$/g, "") || "page";
+    let s = base, n = 2;
+    while (used.has(s)) s = base + "-" + n++;
+    used.add(s);
+    db.prepare("UPDATE pages SET slug=? WHERE id=?").run(s, p.id);
+  });
+} catch {}
 
 const now = () => Date.now();
 const num = (v) => (typeof v === "bigint" ? Number(v) : v);
@@ -207,14 +221,39 @@ export function listPages(siteId) {
   return db.prepare("SELECT * FROM pages WHERE site_id=? ORDER BY position,id").all(siteId).map(parsePage);
 }
 export const getPage = (id) => parsePage(db.prepare("SELECT * FROM pages WHERE id=?").get(id));
+export const getPageBySlug = (siteId, slug) => parsePage(db.prepare("SELECT * FROM pages WHERE site_id=? AND slug=?").get(siteId, slug));
 export function savePageMeta(id, meta) { db.prepare("UPDATE pages SET meta=? WHERE id=?").run(JSON.stringify(meta || {}), id); }
-export function createPage(siteId, name) {
+function uniquePageSlug(siteId, base, excludeId = null) {
+  let s = base, n = 2;
+  while (true) {
+    const row = db.prepare("SELECT id FROM pages WHERE site_id=? AND slug=?").get(siteId, s);
+    if (!row || row.id === excludeId) return s;
+    s = base + "-" + n++;
+  }
+}
+export function createPage(siteId, name, parentId = null) {
   const pos = (db.prepare("SELECT MAX(position) m FROM pages WHERE site_id=?").get(siteId).m ?? -1) + 1;
-  const info = db.prepare("INSERT INTO pages (site_id,name,position,blocks,updated_at) VALUES (?,?,?,?,?)")
-    .run(siteId, name, pos, "[]", now());
+  const base = String(name || "page").toLowerCase().replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, "-").replace(/^-+|-+$/g, "") || "page";
+  const slug = uniquePageSlug(siteId, base);
+  const info = db.prepare("INSERT INTO pages (site_id,name,slug,parent_id,position,blocks,updated_at) VALUES (?,?,?,?,?,?,?)")
+    .run(siteId, name, slug, parentId || null, pos, "[]", now());
   return getPage(num(info.lastInsertRowid));
 }
-export function renamePage(id, name) { db.prepare("UPDATE pages SET name=? WHERE id=?").run(name, id); }
+export function renamePage(id, name) {
+  const pg = getPage(id);
+  if (!pg) return;
+  const base = String(name || "page").toLowerCase().replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, "-").replace(/^-+|-+$/g, "") || "page";
+  const slug = uniquePageSlug(pg.site_id, base, id);
+  db.prepare("UPDATE pages SET name=?,slug=? WHERE id=?").run(name, slug, id);
+}
+export function setPageSlug(id, slug) {
+  const pg = getPage(id);
+  if (!pg) return;
+  const safe = uniquePageSlug(pg.site_id, slug, id);
+  db.prepare("UPDATE pages SET slug=? WHERE id=?").run(safe, id);
+  return safe;
+}
+export function setPageParent(id, parentId) { db.prepare("UPDATE pages SET parent_id=? WHERE id=?").run(parentId || null, id); }
 export function deletePage(id) { db.prepare("DELETE FROM pages WHERE id=?").run(id); }
 export function savePageBlocks(id, blocks, author) {
   const json = JSON.stringify(blocks);

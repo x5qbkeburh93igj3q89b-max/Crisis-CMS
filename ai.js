@@ -313,6 +313,31 @@ export async function suggestKeywords({ topic }) {
   return { keywords: (json && json.keywords) || [] };
 }
 
+/**
+ * サイトテーマに合ったカスタムCSSを生成。
+ * heroStyle候補も返す（'default'|'gradient'|'particles'）
+ */
+export async function generateCustomCss({ siteTitle, mood, accent, pageBg }) {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key || key.startsWith("sk-ant-xxx")) throw new Error("ANTHROPIC_API_KEY が未設定です");
+  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model, max_tokens: 1200,
+      system: `あなたはWebデザインCSSの専門家です。指定の雰囲気・カラーに合ったカスタムCSSと、heroブロックのスタイル推奨を返します。
+出力はJSONのみ: {"css":"有効なCSSコード（セレクタ+プロパティ、animation/@keyframes可）","heroStyle":"gradient|particles|default","note":"1文の説明"}
+CSSはサイト全体に適用されます。bodyやh1-h3, aタグ, .nav, .wrapなどに適用するスタイルを書いてください。派手すぎず読みやすく。`,
+      messages: [{ role: "user", content: `サイト名: ${siteTitle}\n雰囲気キーワード: ${mood}\nアクセントカラー: ${accent}\n背景色: ${pageBg}` }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Claude APIエラー(${res.status}): ${(await res.text()).slice(0, 300)}`);
+  const json = extractJSON((await res.json()).content.map(c => c.text || "").join("").trim());
+  if (!json) throw new Error("CSS生成に失敗しました");
+  return { css: json.css || "", heroStyle: json.heroStyle || "default", note: json.note || "" };
+}
+
 // テキストからJSONオブジェクトを安全に抽出
 function extractJSON(text) {
   try { return JSON.parse(text); } catch {}

@@ -159,8 +159,9 @@ function applySiteVars() {
   c.style.setProperty("--site-font", s.font);
   c.style.background = s.pageBg; c.style.color = s.textColor;
   c.classList.toggle("full", !!s.fullWidth);
-  // 編集対象サイトの色はキャンバス内だけで使用（管理画面のオレンジUIは保持）
   c.style.setProperty("--site-accent", s.accent);
+  const hMap = { small: "500px", medium: "700px", large: "calc(100vh - 80px)", fullscreen: "100vh" };
+  c.style.setProperty("--canvas-min-h", hMap[s.canvasHeight] || "700px");
   document.title = s.siteTitle + " — Crisis CMS";
 }
 
@@ -309,10 +310,22 @@ function renderPalette() {
 function renderPages() {
   const pl = $("pageList"); pl.innerHTML = "";
   PAGES.forEach((pg, i) => {
+    const indent = pg.parent_id ? "margin-left:12px;font-size:12px;" : "";
+    const slugLabel = pg.slug ? `<span style="display:block;font-size:10px;color:var(--muted);line-height:1.2">/${pg.slug}</span>` : "";
     const it = document.createElement("div"); it.className = "page-item" + (i === curIdx ? " active" : "");
-    it.innerHTML = `<span style="flex:1">${esc(pg.name)}</span><span class="pa ren">✎</span><span class="pa del">✕</span>`;
+    it.innerHTML = `<span style="flex:1;${indent}">${esc(pg.name)}${slugLabel}</span><span class="pa ren" title="名前・URLを変更">✎</span><span class="pa del" title="削除">✕</span>`;
     it.onclick = e => { if (e.target.classList.contains("ren") || e.target.classList.contains("del")) return; curIdx = i; selectedId = null; renderPages(); renderCanvas(); joinPage(); };
-    it.querySelector(".ren").onclick = async e => { e.stopPropagation(); const n = prompt("ページ名", pg.name); if (n) { await api("PUT", `/api/pages/${pg.id}/name`, { name: n }); pg.name = n; renderPages(); } };
+    it.querySelector(".ren").onclick = async e => {
+      e.stopPropagation();
+      const n = prompt("ページ名", pg.name); if (!n) return;
+      await api("PUT", `/api/pages/${pg.id}/name`, { name: n });
+      const newSlug = prompt("URLスラッグ（英数字・ハイフン）", pg.slug || "");
+      if (newSlug !== null && newSlug !== pg.slug) {
+        const { slug } = await api("PUT", `/api/pages/${pg.id}/slug`, { slug: newSlug });
+        pg.slug = slug;
+      }
+      pg.name = n; renderPages();
+    };
     it.querySelector(".del").onclick = async e => { e.stopPropagation(); if (PAGES.length <= 1) return toast("最後のページは削除できません", true); if (confirm(`「${pg.name}」を削除？`)) { await api("DELETE", `/api/pages/${pg.id}`); await refreshPagesKeepIdx(); } };
     pl.appendChild(it);
   });
@@ -320,7 +333,14 @@ function renderPages() {
 $("btnAddPage").onclick = async () => {
   if (!canEdit()) return toast("権限がありません", true);
   const n = prompt("新しいページ名", "新規ページ"); if (!n) return;
-  const { page } = await api("POST", "/api/pages", { name: n });
+  const topPages = PAGES.filter(p => !p.parent_id);
+  let parentId = null;
+  if (topPages.length > 0) {
+    const opts = ["なし（トップレベル）", ...topPages.map(p => p.name)];
+    const idx = opts.indexOf(prompt("親ページ（下層ページにする場合選択）:\n" + opts.map((o, i) => i + ": " + o).join("\n") + "\n\n番号を入力（0でトップレベル）", "0"));
+    if (idx > 0) parentId = topPages[idx - 1].id;
+  }
+  const { page } = await api("POST", "/api/pages", { name: n, parentId });
   await loadSite(); curIdx = PAGES.findIndex(p => p.id === page.id); selectedId = null; renderPages(); renderCanvas(); joinPage();
 };
 
@@ -972,6 +992,13 @@ $("btnSettings").onclick = () => {
     <label>アクセントカラー</label><input id="st_accent" type="color" value="${s.accent}">
     <label>ページ背景色</label><input id="st_pagebg" type="color" value="${s.pageBg}">
     <label>基本文字色</label><input id="st_text" type="color" value="${s.textColor}">
+    <label>エディタ高さ</label><select id="st_canvas_h"><option value="small" ${(s.canvasHeight||'medium')==='small'?'selected':''}>コンパクト (500px)</option><option value="medium" ${(s.canvasHeight||'medium')==='medium'?'selected':''}>普通 (700px)</option><option value="large" ${(s.canvasHeight||'medium')==='large'?'selected':''}>広め (画面高さ)</option><option value="fullscreen" ${(s.canvasHeight||'medium')==='fullscreen'?'selected':''}>全画面</option></select>
+    <label style="grid-column:1/-1;margin-top:8px">▼ カスタムCSS（近未来エフェクト）</label>
+    <label style="grid-column:1/-1">雰囲気キーワード（例: 近未来・クール・和風）</label>
+    <input id="st_mood" style="grid-column:1/-1" value="${esc(s.mood || "")}" placeholder="例: 近未来・ダーク・サイバーパンク">
+    <label style="grid-column:1/-1">カスタムCSS（直接編集も可）</label>
+    <textarea id="st_customcss" style="grid-column:1/-1;min-height:80px;font-family:monospace;font-size:12px" placeholder="/* ここにCSSを入力 */">${esc(s.customCss || "")}</textarea>
+    <div style="grid-column:1/-1"><button class="tbtn ai" id="st_gen_css">✨ AIにCSSを生成してもらう</button><span id="st_css_status" style="font-size:12px;margin-left:10px;color:var(--muted)"></span></div>
     <label style="grid-column:1/-1;margin-top:8px">▼ 問い合わせ通知（任意）</label>
     <label>通知先メール（要SMTP設定）</label><input id="st_nmail" value="${esc(s.notifyEmail || "")}" placeholder="owner@example.com">
     <label>通知Webhook URL（Slack等）</label><input id="st_nhook" value="${esc(s.notifyWebhook || "")}" placeholder="https://hooks.slack.com/...">
@@ -982,8 +1009,18 @@ $("btnSettings").onclick = () => {
     $("st_font").value = p.font;
     $("modalBox").querySelectorAll(".preset-card").forEach(x => x.classList.toggle("active", x === c));
   });
+  $("st_gen_css").onclick = async () => {
+    const btn = $("st_gen_css"); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> 生成中…`;
+    $("st_css_status").textContent = "";
+    try {
+      const { css, heroStyle, note } = await api("POST", "/api/ai/custom-css", { mood: $("st_mood").value });
+      $("st_customcss").value = css;
+      $("st_css_status").textContent = `✓ ${note} (hero推奨: ${heroStyle})`;
+    } catch (e) { $("st_css_status").textContent = "エラー: " + e.message; }
+    btn.disabled = false; btn.innerHTML = "✨ AIにCSSを生成してもらう";
+  };
   $("st_apply").onclick = async () => {
-    Object.assign(s, { siteTitle: $("st_title").value, font: $("st_font").value, maxWidth: parseInt($("st_maxw").value) || 960, fullWidth: $("st_full").checked, accent: $("st_accent").value, pageBg: $("st_pagebg").value, textColor: $("st_text").value, notifyEmail: $("st_nmail").value, notifyWebhook: $("st_nhook").value });
+    Object.assign(s, { siteTitle: $("st_title").value, font: $("st_font").value, maxWidth: parseInt($("st_maxw").value) || 960, fullWidth: $("st_full").checked, accent: $("st_accent").value, pageBg: $("st_pagebg").value, textColor: $("st_text").value, canvasHeight: $("st_canvas_h").value, mood: $("st_mood").value, customCss: $("st_customcss").value, notifyEmail: $("st_nmail").value, notifyWebhook: $("st_nhook").value });
     await api("PUT", "/api/site/settings", { settings: s });
     closeModal(); applySiteVars(); renderCanvas(); toast("デザインを更新しました");
   };

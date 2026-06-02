@@ -8,7 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import * as DB from "./db.js";
-import { suggestDesign, askDesignAdvice, generateImage, importFromUrl, analyzeAnalytics, generateBlog, suggestSeo, chatEditBlocks, growthSuggestions, a11yCheck, suggestKeywords } from "./ai.js";
+import { suggestDesign, askDesignAdvice, generateImage, importFromUrl, analyzeAnalytics, generateBlog, suggestSeo, chatEditBlocks, growthSuggestions, a11yCheck, suggestKeywords, generateCustomCss } from "./ai.js";
 import { renderSiteHTML, renderBlogIndex, renderPostPage, blocksToText } from "./render.js";
 
 const slugify = (s) => (String(s || "").toLowerCase().trim().replace(/[^\w぀-ヿ一-鿿-]+/g, "-").replace(/^-+|-+$/g, "") || "post") + "";
@@ -143,7 +143,7 @@ app.put("/api/site/publish", auth, (req, res) => {
 app.post("/api/pages", auth, (req, res) => {
   const sid = assertSiteAccess(req, res); if (!sid) return;
   if (!canEditRole(req.user.role)) return res.status(403).json({ error: "権限がありません" });
-  const page = DB.createPage(sid, req.body.name || "新規ページ");
+  const page = DB.createPage(sid, req.body.name || "新規ページ", req.body.parentId || null);
   broadcastSite(sid, { kind: "pages-changed" });
   res.json({ page });
 });
@@ -151,6 +151,20 @@ app.put("/api/pages/:id/name", auth, (req, res) => {
   const sid = assertSiteAccess(req, res); if (!sid) return;
   if (!assertPageInSite(+req.params.id, sid, res)) return;
   DB.renamePage(+req.params.id, req.body.name); broadcastSite(sid, { kind: "pages-changed" }); res.json({ ok: true });
+});
+app.put("/api/pages/:id/slug", auth, (req, res) => {
+  const sid = assertSiteAccess(req, res); if (!sid) return;
+  if (!assertPageInSite(+req.params.id, sid, res)) return;
+  const safe = String(req.body.slug || "").toLowerCase().replace(/[^\w-]/g, "-").replace(/^-+|-+$/g, "") || null;
+  if (!safe) return res.status(400).json({ error: "slugが無効です" });
+  const result = DB.setPageSlug(+req.params.id, safe);
+  broadcastSite(sid, { kind: "pages-changed" }); res.json({ slug: result });
+});
+app.put("/api/pages/:id/parent", auth, (req, res) => {
+  const sid = assertSiteAccess(req, res); if (!sid) return;
+  if (!assertPageInSite(+req.params.id, sid, res)) return;
+  DB.setPageParent(+req.params.id, req.body.parentId || null);
+  broadcastSite(sid, { kind: "pages-changed" }); res.json({ ok: true });
 });
 app.delete("/api/pages/:id", auth, (req, res) => {
   const sid = assertSiteAccess(req, res); if (!sid) return;
@@ -243,6 +257,17 @@ app.post("/api/ai/a11y", auth, async (req, res) => {
   const page = assertPageInSite(+req.body.pageId, sid, res); if (!page) return;
   try { res.json({ text: await a11yCheck({ pageName: page.name, contentText: blocksToText(page.blocks) }) }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/ai/custom-css", auth, async (req, res) => {
+  const sid = assertSiteAccess(req, res); if (!sid) return;
+  if (!canEditRole(req.user.role)) return res.status(403).json({ error: "権限がありません" });
+  try {
+    const site = DB.getSite(sid);
+    const s = site.settings;
+    const result = await generateCustomCss({ siteTitle: s.siteTitle, mood: req.body.mood || "モダン", accent: s.accent, pageBg: s.pageBg });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ================= AIグロースエージェント =================
@@ -539,8 +564,14 @@ function servePublic(req, res, isPreview) {
   const pages = DB.listPages(site.id);
   const hasBlog = DB.listPublishedPosts(site.id).length > 0;
   const files = renderSiteHTML(site, pages, { track: !isPreview, hasBlog });
-  const key = (req.params.page && files[req.params.page]) ? req.params.page : "index.html";
-  res.type("html").send(files[key]);
+  const pageParam = req.params.page || "";
+  // slug.html → slug → index.html の順でマッチ
+  const key = files[pageParam + ".html"] ? pageParam + ".html"
+    : files[pageParam] ? pageParam
+    : "index.html";
+  const html = files[key];
+  if (!html) return res.status(404).send("ページが見つかりません");
+  res.type("html").send(html);
 }
 
 // 静的フロント（最後に置く）

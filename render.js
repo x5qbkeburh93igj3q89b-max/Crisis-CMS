@@ -52,12 +52,26 @@ export function renderBlock(b, accent, siteSlug) {
     case "video": { const e = embedUrl(b.url); return e ? `<div style="position:relative;padding-bottom:56.25%;height:0"><iframe src="${e}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:8px" allowfullscreen></iframe></div>` : ""; }
     case "html": return b.code || "";
     case "hero": {
-      const bg = b.img ? `background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.35)),url('${esc(b.img)}') center/cover;` : `background:${b.bg};`;
       const abAttr = (b.ab && b.titleB) ? " data-ab" : "";
       const titleHtml = (b.ab && b.titleB)
-        ? `<h1 data-ab-a style="margin:0 0 10px;font-size:34px">${esc(b.title)}</h1><h1 data-ab-b style="margin:0 0 10px;font-size:34px;display:none">${esc(b.titleB)}</h1>`
-        : `<h1 style="margin:0 0 10px;font-size:34px">${esc(b.title)}</h1>`;
-      const cta = b.btn ? `<a href="${esc(b.href || "#")}"${b.cv ? ` data-cms-cv="${esc(b.btn)}"` : ""} style="display:inline-block;padding:12px 28px;background:#fff;color:#222;border-radius:8px;text-decoration:none;font-weight:600">${esc(b.btn)}</a>` : "";
+        ? `<h1 data-ab-a style="margin:0 0 10px;font-size:clamp(26px,5vw,52px);font-weight:800;letter-spacing:-.02em">${esc(b.title)}</h1><h1 data-ab-b style="margin:0 0 10px;font-size:clamp(26px,5vw,52px);font-weight:800;display:none">${esc(b.titleB)}</h1>`
+        : `<h1 style="margin:0 0 10px;font-size:clamp(26px,5vw,52px);font-weight:800;letter-spacing:-.02em">${esc(b.title)}</h1>`;
+      const cta = b.btn ? `<a href="${esc(b.href || "#")}"${b.cv ? ` data-cms-cv="${esc(b.btn)}"` : ""} style="display:inline-block;padding:14px 32px;background:rgba(255,255,255,.18);color:${b.color||'#fff'};border:2px solid rgba(255,255,255,.6);border-radius:50px;text-decoration:none;font-weight:700;backdrop-filter:blur(6px);transition:all .2s">${esc(b.btn)}</a>` : "";
+      if (b.heroStyle === "particles") {
+        const pid = "ptc_" + (b.id || Math.random().toString(36).slice(2,8));
+        const bgcss = b.img ? `background:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)),url('${esc(b.img)}') center/cover` : `background:${b.bg||'#0f0f23'}`;
+        return `<div${abAttr} style="position:relative;overflow:hidden;${bgcss};color:${b.color||'#fff'};padding:80px 28px;text-align:center;border-radius:10px">
+          <canvas id="${pid}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
+          <div style="position:relative;z-index:1">${titleHtml}<p style="margin:0 0 24px;font-size:18px;opacity:.88">${esc(b.sub)}</p>${cta}</div>
+          <script>(function(){var c=document.getElementById('${pid}'),ctx=c.getContext('2d'),pts=[];function resize(){c.width=c.offsetWidth;c.height=c.offsetHeight;}resize();window.addEventListener('resize',resize);for(var i=0;i<80;i++)pts.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.5+.5,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,o:Math.random()*.6+.2});function draw(){ctx.clearRect(0,0,c.width,c.height);pts.forEach(function(p){ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,'+p.o+')';ctx.fill();p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>c.width)p.vx*=-1;if(p.y<0||p.y>c.height)p.vy*=-1;});requestAnimationFrame(draw);}draw();})();<\/script>
+        </div>`;
+      }
+      if (b.heroStyle === "gradient") {
+        const c1 = b.bg || "#5b8cff", c2 = b.bg2 || "#a855f7";
+        return `<div${abAttr} style="position:relative;overflow:hidden;background:linear-gradient(135deg,${c1},${c2},${c1});background-size:300% 300%;animation:heroGrad 6s ease infinite;color:${b.color||'#fff'};padding:80px 28px;text-align:center;border-radius:10px">
+          ${titleHtml}<p style="margin:0 0 24px;font-size:18px;opacity:.88">${esc(b.sub)}</p>${cta}</div>`;
+      }
+      const bg = b.img ? `background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.35)),url('${esc(b.img)}') center/cover;` : `background:${b.bg};`;
       return `<div${abAttr} style="${bg}color:${b.color};padding:64px 28px;text-align:center;border-radius:10px">${titleHtml}<p style="margin:0 0 20px;font-size:17px;opacity:.92">${esc(b.sub)}</p>${cta}</div>`;
     }
     case "columns": {
@@ -141,19 +155,27 @@ function pageShell(s, { title, desc, og, navHtml, body, extra }) {
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title>${desc}${og}
 <style>*{box-sizing:border-box}body{margin:0;font-family:${s.font};background:${s.pageBg};color:${s.textColor};line-height:1.6}
-.nav{display:flex;gap:18px;padding:16px 24px;border-bottom:1px solid #eee;flex-wrap:wrap}.nav a{color:${s.accent};text-decoration:none;font-weight:600}
+.nav{display:flex;gap:18px;padding:16px 24px;border-bottom:1px solid rgba(0,0,0,.08);flex-wrap:wrap;backdrop-filter:blur(8px);position:sticky;top:0;z-index:100;background:${s.pageBg}cc}.nav a{color:${s.accent};text-decoration:none;font-weight:600;transition:opacity .2s}.nav a:hover{opacity:.7}
 .wrap{max-width:${s.fullWidth ? "100%" : s.maxWidth + "px"};margin:0 auto;padding:24px}img{max-width:100%}
 .post-card{display:block;border:1px solid #eee;border-radius:12px;overflow:hidden;text-decoration:none;color:inherit;margin-bottom:16px}
 .post-card img{width:100%;height:180px;object-fit:cover;display:block}
 .post-card .pc-body{padding:14px 16px}.post-card h3{margin:0 0 6px}.post-card p{margin:0;color:#666;font-size:14px}
-article h2{margin-top:1.6em}article img{border-radius:8px}.post-date{color:#999;font-size:13px}</style></head>
-<body><div class="nav">${navHtml}</div><div class="wrap">${body}</div>${extra || ""}</body></html>`;
+article h2{margin-top:1.6em}article img{border-radius:8px}.post-date{color:#999;font-size:13px}
+[data-aos]{opacity:0;transform:translateY(28px);transition:opacity .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1)}
+[data-aos].aos-in{opacity:1;transform:none}
+@keyframes heroGrad{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+${s.customCss || ""}</style></head>
+<body><div class="nav">${navHtml}</div><div class="wrap">${body}</div>${extra || ""}
+<script>(function(){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('aos-in');io.unobserve(e.target);}});},{threshold:.12});document.querySelectorAll('[data-aos]').forEach(function(el){io.observe(el);});})();<\/script>
+</body></html>`;
 }
 
 export function renderSiteHTML(site, pages, opts = {}) {
   const s = site.settings, slug = site.slug;
   const hasForm = (pg) => JSON.stringify(pg.blocks).includes('"form"');
-  let nav = pages.map((p, i) => `<a href="${i === 0 ? "index" : "page" + i}.html">${esc(p.name)}</a>`).join("");
+  // slug ベースのナビ（slug がなければ index/pageN にフォールバック）
+  const pageUrl = (pg, i) => pg.slug ? `/s/${slug}/${pg.slug}` : (i === 0 ? `/s/${slug}/` : `/s/${slug}/page${i}`);
+  let nav = pages.filter(p => !p.parent_id).map((p, i) => `<a href="${pageUrl(p, pages.indexOf(p))}">${esc(p.name)}</a>`).join("");
   if (opts.hasBlog) nav += `<a href="/s/${slug}/blog">ブログ</a>`;
   const files = {};
   pages.forEach((pg, i) => {
@@ -161,11 +183,14 @@ export function renderSiteHTML(site, pages, opts = {}) {
     const title = esc(m.title || `${pg.name} | ${s.siteTitle}`);
     const desc = m.description ? `<meta name="description" content="${esc(m.description)}">` : "";
     const og = `<meta property="og:title" content="${title}">${m.description ? `<meta property="og:description" content="${esc(m.description)}">` : ""}${m.ogImage ? `<meta property="og:image" content="${esc(m.ogImage)}">` : ""}<meta property="og:type" content="website">`;
-    const body = pg.blocks.map(b => `<div style="margin:10px 0">${renderBlock(b, s.accent, slug)}</div>`).join("\n");
+    const body = pg.blocks.map(b => `<div data-aos style="margin:10px 0">${renderBlock(b, s.accent, slug)}</div>`).join("\n");
     const ld = jsonLd({ "@context": "https://schema.org", "@type": "WebPage", name: m.title || pg.name, description: m.description || "", isPartOf: { "@type": "WebSite", name: s.siteTitle } });
     const extra = `${ld}${hasForm(pg) ? FORM_JS : ""}${opts.track ? trackJS(slug) : ""}`;
-    files[i === 0 ? "index.html" : "page" + i + ".html"] = pageShell(s, { title, desc, og, navHtml: nav, body, extra });
+    const fileKey = pg.slug ? pg.slug + ".html" : (i === 0 ? "index.html" : "page" + i + ".html");
+    files[fileKey] = pageShell(s, { title, desc, og, navHtml: nav, body, extra });
   });
+  // index.html が slug ベースのページで上書きされていない場合は最初のページを使用
+  if (!files["index.html"]) files["index.html"] = Object.values(files)[0] || "";
   return files;
 }
 

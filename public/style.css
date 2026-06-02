@@ -121,7 +121,7 @@ button{font-family:inherit;cursor:pointer}
 
 /* キャンバス */
 .canvas-wrap{overflow:auto;background:var(--bg);display:flex;justify-content:center;padding:28px;background-image:radial-gradient(var(--border2) 1px,transparent 1px);background-size:18px 18px}
-.canvas{background:#fff;color:#111;width:100%;max-width:var(--site-maxw,960px);min-height:92%;border-radius:10px;box-shadow:var(--shadow-lg);font-family:var(--site-font,system-ui);position:relative}
+.canvas{background:#fff;color:#111;width:100%;max-width:var(--site-maxw,960px);min-height:var(--canvas-min-h,700px);border-radius:10px;box-shadow:var(--shadow-lg);font-family:var(--site-font,system-ui);position:relative}
 .canvas.full{max-width:100%}
 .dropzone{min-height:120px;padding:10px}
 .empty-hint{display:flex;align-items:center;justify-content:center;height:220px;color:var(--muted);font-size:14px;border:2px dashed var(--border2);border-radius:12px;margin:10px;text-align:center;padding:0 20px;line-height:1.6}
